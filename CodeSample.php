@@ -1,6 +1,6 @@
 <?php
 
-$homeApi = new HomeApi('http://192.168.86.37/apps/api/110');
+$homeApi = new HomeApi();
 $home = new HomeAutomation($homeApi);
 $home->run($argv);
 
@@ -9,11 +9,9 @@ class HomeAutomation {
     const ARG_CMD = 'cmd';
     const ARG_ID = 'id';
     const ARG_ACTION = 'action';
-    const ARG_APITOKEN = 'apiToken';
 
     const REQUIRED_ARGS = [
         self::ARG_CMD,
-        self::ARG_APITOKEN,
     ];
 
     const CMDS_AND_REQUIRED_ARGS = [
@@ -153,7 +151,6 @@ Valid arguments are:
 --cmd=getRecentDevices,getDeviceActions,runAction
 --action=string
 --id=int
---apiToken=string
 ';
 
         // Stop execution as if we see help command we only want to print help message
@@ -172,35 +169,43 @@ Valid arguments are:
 }
 
 class HomeApi {
+    const BASE_URL_ENV_VAR = 'HOME_API_URL';
+    const API_TOKEN = 'HOME_API_TOKEN';
     const DEVICE_ENDPOINT = '/devices';
     const NUM_RECENT_DEVICES = 10;
 
-    var string $baseUrl;
+    const ENV_VAR_NOT_SET = 'Environment variables needs to be set to run script: ';
 
-    function __construct(string $baseUrl) {
-        $this->baseUrl = $baseUrl;
+    var string $baseUrl;
+    var string $token;
+
+    function __construct() {
+        $this->baseUrl = getenv(self::BASE_URL_ENV_VAR);
+        $this->token = getenv(self::API_TOKEN);
+
+        if(empty($this->baseUrl) || empty($this->token)) {
+            HomeAutomation::printError(self::ENV_VAR_NOT_SET . self::BASE_URL_ENV_VAR . ',' . self::API_TOKEN);
+        }
     }
 
     public function getRecentDevices(array $validArgs): array {
-        return $this->apiRequest(self::DEVICE_ENDPOINT, $validArgs[HomeAutomation::ARG_APITOKEN]);
+        return $this->apiRequest(self::DEVICE_ENDPOINT);
     }
 
     public function getDeviceActions(array $validArgs): array {
         return $this->apiRequest(
-            self::DEVICE_ENDPOINT . '/' .$validArgs[HomeAutomation::ARG_ID],
-            $validArgs[HomeAutomation::ARG_APITOKEN]
+            self::DEVICE_ENDPOINT . '/' .$validArgs[HomeAutomation::ARG_ID]
         );
     }
 
     public function runAction(array $validArgs): array {
         return $this->apiRequest(
-            self::DEVICE_ENDPOINT . '/' . $validArgs[HomeAutomation::ARG_ID] . '/' . $validArgs[HomeAutomation::ARG_ACTION],
-            $validArgs[HomeAutomation::ARG_APITOKEN]
+            self::DEVICE_ENDPOINT . '/' . $validArgs[HomeAutomation::ARG_ID] . '/' . $validArgs[HomeAutomation::ARG_ACTION]
         );
     }
 
-    private function apiRequest($endpoint, $apiToken): array {
-        $url = $this->baseUrl . $endpoint .  '?access_token=' . $apiToken;
+    private function apiRequest($endpoint): array {
+        $url = $this->baseUrl . $endpoint .  '?access_token=' . $this->token;
 
         // Setup curl
         $ch = curl_init();
