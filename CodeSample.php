@@ -28,6 +28,7 @@ class HomeAutomation {
     const ERROR_API_MSG = 'Error occurred making request to api check api token';
     const ERROR_CMD_NOT_FOUND = 'Command not found';
     const ERROR_MISSING_ARG = 'Missing required arguments: ';
+    const ERROR_INVALID_ACTION = 'Invalid action supplied run command getDeviceActions to see valid actions';
 
     var HomeApi $homeApi;
 
@@ -74,13 +75,19 @@ class HomeAutomation {
     }
 
     private function runAction(array $validArgs): void {
+        $deviceInfo = $this->homeApi->getDeviceActions($validArgs);
+
+        if (!in_array($validArgs[self::ARG_ACTION], $deviceInfo['commands'])) {
+            self::printError(self::ERROR_INVALID_ACTION);
+        }
+
         $this->homeApi->runAction($validArgs);
     }
 
     private function getDeviceActions(array $validArgs): void {
         // Check if id argument is set
         if (!isset($validArgs[self::ARG_ID])) {
-            self::printError(self::ERROR_MISSING_ARG, );
+            self::printError(self::ERROR_MISSING_ARG);
         }
 
         $deviceInfo = $this->homeApi->getDeviceActions($validArgs);
