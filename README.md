@@ -4,10 +4,6 @@
 This is a small php code sample working with a home automation API. This script allow you to get recently added devices, get avbliable device action and run those actions.
 
 
-
-
-
-
 ## Environment Variables
 
 To run this project, you will need to add the following environment variables to your .env file

@@ -19,6 +19,9 @@ class HomeAutomation {
             self::ARG_ID,
             self::ARG_ACTION,
         ],
+        'toggle' => [
+            self::ARG_ID,
+        ],
         'getDeviceActions' => [
             self::ARG_ID,
         ],
@@ -29,6 +32,7 @@ class HomeAutomation {
     const ERROR_CMD_NOT_FOUND = 'Command not found';
     const ERROR_MISSING_ARG = 'Missing required arguments: ';
     const ERROR_INVALID_ACTION = 'Invalid action supplied run command getDeviceActions to see valid actions';
+    const ERROR_INVALID_SWITCH = 'Only devices with switch attribute can use toggle cmd';
 
     var HomeApi $homeApi;
 
@@ -74,8 +78,32 @@ class HomeAutomation {
         }
     }
 
+    private function toggle(array $validArgs): void {
+        $deviceInfo = $this->homeApi->getDeviceInfo($validArgs);
+
+        $switchStatus = null;
+        foreach ($deviceInfo[DeviceAttribute::ATTRIBUTES] as $attribute) {
+            try {
+                $switch = new SwitchAttribute($attribute);
+                $switchStatus = $switch->getCurrentValue();
+                break;
+            } catch (Throwable $e) {
+                // do nothing attribute was not switch
+            }
+        }
+
+        if (empty($switchStatus)) {
+            self::printError(self::ERROR_INVALID_SWITCH);
+        }
+
+        $validArgs[self::ARG_ACTION] =
+            $switchStatus === SwitchAttribute::SWITCH_OFF ? SwitchAttribute::SWITCH_ON :  SwitchAttribute::SWITCH_OFF;
+
+        $this->homeApi->runAction($validArgs);
+    }
+
     private function runAction(array $validArgs): void {
-        $deviceInfo = $this->homeApi->getDeviceActions($validArgs);
+        $deviceInfo = $this->homeApi->getDeviceInfo($validArgs);
 
         if (!in_array($validArgs[self::ARG_ACTION], $deviceInfo['commands'])) {
             self::printError(self::ERROR_INVALID_ACTION);
@@ -90,7 +118,7 @@ class HomeAutomation {
             self::printError(self::ERROR_MISSING_ARG);
         }
 
-        $deviceInfo = $this->homeApi->getDeviceActions($validArgs);
+        $deviceInfo = $this->homeApi->getDeviceInfo($validArgs);
 
         echo 'The following actions can be performed on ' . $deviceInfo['label'] . PHP_EOL;
         foreach ($deviceInfo['commands'] as $command) {
@@ -155,12 +183,12 @@ This script is used to get data from Hubitat api
 NOTE: apiToken must be provided for all commands except help
 Valid arguments are:
 --help
---cmd=getRecentDevices,getDeviceActions,runAction
+--cmd=getRecentDevices,getDeviceActions,runAction,toggle
 --action=string
 --id=int
 ';
 
-        // Stop execution as if we see help command we only want to print help message
+        // Stop execution if we see help command we only want to print help message
         die();
     }
 
@@ -199,7 +227,7 @@ class HomeApi {
         return $this->apiRequest(self::DEVICE_ENDPOINT);
     }
 
-    public function getDeviceActions(array $validArgs): array {
+    public function getDeviceInfo(array $validArgs): array {
         return $this->apiRequest(
             self::DEVICE_ENDPOINT . '/' .$validArgs[HomeAutomation::ARG_ID]
         );
@@ -231,5 +259,64 @@ class HomeApi {
         }
 
         return $result;
+    }
+}
+
+abstract class DeviceAttribute {
+    const ATTRIBUTES = 'attributes';
+
+    protected string $currentValue;
+    protected string $name;
+
+    function __construct($attributeInfo) {
+        $this->setCurrentValue($attributeInfo['currentValue']);
+        $this->setName($attributeInfo['name']);
+    }
+
+    abstract public function getType(): string;
+
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    public function setName(string $name): DeviceAttribute
+    {
+        $this->name = $name;
+        return $this;
+    }
+
+    public function getCurrentValue(): string
+    {
+        return $this->currentValue;
+    }
+
+    public function setCurrentValue(string $currentValue): DeviceAttribute
+    {
+        $this->currentValue = $currentValue;
+        return $this;
+    }
+}
+
+class SwitchAttribute extends DeviceAttribute {
+    const TYPE = 'switch';
+
+    const SWITCH_ON = 'on';
+    const SWITCH_OFF = 'off';
+
+    function __construct($attributeInfo) {
+        parent::__construct($attributeInfo);
+
+        if (!$this->isSwitch()) {
+            throw new Exception('Not a switch');
+        }
+    }
+
+    public function getType():string {
+        return self::TYPE;
+    }
+
+    public function isSwitch():string {
+        return $this->getName() === $this->getType();
     }
 }
